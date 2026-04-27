@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+dist/
+build/
+
+# Node / frontend
+node_modules/
+control_plane/frontend/dist/
+control_plane/frontend/.env
+
+# Environment / secrets
+.env
+*.env
+*.secret
+secrets/
+
+# Simulation generated data (large, regeneratable)
+simulation/data/*.json
+
+# SSH keys — never commit
+*.pem
+id_ed25519
+id_ed25519.pub
+id_rsa
+id_rsa.pub
+infra/brain/ollama_models/id_ed25519*
+
+# Claude Code local settings
+.claude/
+
+# Docker volumes / local state
+infra/postgres/
+infra/kafka/data/
+infra/minio/data/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Airflow
+airflow/logs/
+airflow/*.db
+airflow/*.cfg
+
+# Temp / build
+*.tmp
+*.bak

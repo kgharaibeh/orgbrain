@@ -1,0 +1,269 @@
+# =============================================================================
+# PII Anonymization Rules — Core Banking (PostgreSQL source)
+# Loaded by the Flink anonymizer job at startup.
+# =============================================================================
+#
+# methods:
+#   fpe_numeric  — Format-Preserving Encryption (FF3-1): digit-preserving
+#   fpe_date     — FPE on dates: preserves year range, shuffles M/D
+#   fpe_email    — FPE on email local part: preserves domain
+#   hmac_sha256  — HMAC-SHA256: one-way consistent token (same input → same hash)
+#   generalize   — Replace value with category (e.g. M/F → PERSON)
+#   suppress     — Remove field entirely from output
+#   nlp_scrub    — Run Presidio NER to remove PII entities from free text
+#   keep         — Explicit no-op (document analytical value)
+# =============================================================================
+
+version: "1.0"
+source_system: core_banking
+
+topics:
+  - raw_topic: raw.core_banking.public.customers
+    clean_topic: clean.core_banking.customers
+    entity_type: Customer
+    rules:
+      - field: national_id
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        note: "Used for cross-system customer identity joins"
+
+      - field: full_name
+        method: hmac_sha256
+        vault_key: hmac-name-key
+        joinable: true
+        reversible: false
+        note: "Consistent token allows cross-system name matching"
+
+      - field: date_of_birth
+        method: fpe_date
+        vault_key: fpe-date-key
+        joinable: false
+        reversible: true
+        note: "Age band preserved, exact DOB obscured"
+
+      - field: gender
+        method: generalize
+        mapping:
+          M: PERSON
+          F: PERSON
+          Other: PERSON
+          "": UNKNOWN
+        joinable: false
+        reversible: false
+
+      - field: phone_number
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        note: "Token used by CRM for SMS campaigns via deanonymize call"
+
+      - field: email
+        method: fpe_email
+        vault_key: fpe-email-key
+        joinable: true
+        reversible: true
+        note: "Domain preserved; local-part encrypted"
+
+      - field: address_line1
+        method: suppress
+        note: "No analytical value; high re-identification risk"
+
+      - field: address_line2
+        method: suppress
+
+      - field: nationality
+        method: keep
+        note: "Country-level, not individually identifying"
+
+      - field: income_band
+        method: keep
+        note: "Pre-bucketed by source system; not PII"
+
+      - field: occupation
+        method: keep
+
+      - field: city
+        method: keep
+
+      - field: risk_rating
+        method: keep
+
+      - field: kyc_status
+        method: keep
+
+  - raw_topic: raw.core_banking.public.accounts
+    clean_topic: clean.core_banking.accounts
+    entity_type: Account
+    rules:
+      - field: account_number
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        note: "Preserved format (IBAN-like); used as graph edge key"
+
+      - field: customer_id
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        note: "Must match anonymized customer_id for graph joins"
+
+      - field: balance
+        method: keep
+        note: "Aggregate value, not directly PII"
+
+      - field: account_type
+        method: keep
+
+      - field: currency
+        method: keep
+
+      - field: status
+        method: keep
+
+  - raw_topic: raw.core_banking.public.transactions
+    clean_topic: clean.core_banking.transactions
+    entity_type: Transaction
+    rules:
+      - field: customer_id
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+
+      - field: account_number
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+
+      - field: counterparty_account
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        nullable: true
+
+      - field: counterparty_name
+        method: hmac_sha256
+        vault_key: hmac-name-key
+        joinable: true
+        reversible: false
+        nullable: true
+
+      - field: description
+        method: nlp_scrub
+        presidio_entities:
+          - PERSON
+          - PHONE_NUMBER
+          - EMAIL_ADDRESS
+          - IBAN_CODE
+          - CREDIT_CARD
+          - ID_CARD
+        note: "Free text may embed names, account numbers, phone numbers"
+
+      - field: amount
+        method: keep
+
+      - field: currency
+        method: keep
+
+      - field: direction
+        method: keep
+
+      - field: channel
+        method: keep
+
+      - field: merchant_name
+        method: keep
+        note: "Business name, not individual PII"
+
+      - field: merchant_mcc
+        method: keep
+
+      - field: tx_type
+        method: keep
+
+      - field: tx_timestamp
+        method: keep
+
+      - field: balance_after
+        method: keep
+
+      - field: status
+        method: keep
+
+  - raw_topic: raw.core_banking.public.cards
+    clean_topic: clean.core_banking.cards
+    entity_type: Card
+    rules:
+      - field: card_number
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+        note: "16-digit format preserved; token used as graph edge key"
+
+      - field: cardholder_name
+        method: hmac_sha256
+        vault_key: hmac-name-key
+        joinable: true
+        reversible: false
+
+      - field: customer_id
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+
+      - field: masked_pan
+        method: keep
+        note: "Last 4 digits already masked by source system"
+
+      - field: card_type
+        method: keep
+      - field: card_network
+        method: keep
+      - field: product_code
+        method: keep
+      - field: status
+        method: keep
+      - field: expiry_date
+        method: keep
+      - field: credit_limit
+        method: keep
+      - field: outstanding
+        method: keep
+
+  - raw_topic: raw.core_banking.public.loans
+    clean_topic: clean.core_banking.loans
+    entity_type: Loan
+    rules:
+      - field: customer_id
+        method: fpe_numeric
+        vault_key: fpe-numeric-key
+        joinable: true
+        reversible: true
+
+      - field: principal
+        method: keep
+      - field: outstanding
+        method: keep
+      - field: interest_rate
+        method: keep
+      - field: tenor_months
+        method: keep
+      - field: status
+        method: keep
+      - field: dpd
+        method: keep
+      - field: loan_type
+        method: keep
+      - field: product_code
+        method: keep
+      - field: monthly_payment
+        method: keep

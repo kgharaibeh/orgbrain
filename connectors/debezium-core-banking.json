@@ -1,0 +1,65 @@
+{
+  "name": "debezium-core-banking",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "orgbrain",
+    "database.password": "orgbrain_secret",
+    "database.dbname": "core_banking",
+    "database.server.name": "core_banking",
+
+    "plugin.name": "pgoutput",
+    "publication.name": "orgbrain_cdc",
+    "slot.name": "orgbrain_debezium",
+
+    "table.include.list": "public.customers,public.accounts,public.transactions,public.cards,public.loans,public.loan_repayments,public.customer_segment_memberships,public.product_catalog",
+
+    "topic.prefix": "raw.core_banking",
+    "topic.creation.enable": "true",
+    "topic.creation.default.replication.factor": "1",
+    "topic.creation.default.partitions": "4",
+    "topic.creation.default.cleanup.policy": "delete",
+    "topic.creation.default.retention.ms": "604800000",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "true",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "true",
+
+    "transforms": "route,unwrap,addMetadata",
+
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,table,source.ts_ms",
+
+    "transforms.route.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "transforms.route.include": ".*",
+
+    "transforms.addMetadata.type": "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.addMetadata.static.field": "_source_system",
+    "transforms.addMetadata.static.value": "core_banking",
+
+    "heartbeat.interval.ms": "5000",
+    "snapshot.mode": "initial",
+    "snapshot.isolation.mode": "read_committed",
+
+    "decimal.handling.mode": "double",
+    "time.precision.mode": "connect",
+    "date.format": "yyyy-MM-dd",
+    "timestamp.format": "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+
+    "max.batch.size": "2048",
+    "max.queue.size": "8192",
+    "poll.interval.ms": "500",
+
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "errors.deadletterqueue.topic.name": "raw.dlq.core_banking",
+    "errors.deadletterqueue.context.headers.enable": "true"
+  }
+}

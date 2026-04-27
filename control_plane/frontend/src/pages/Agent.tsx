@@ -104,7 +104,7 @@ export default function Agent() {
               <RobotOutlined style={{ marginRight: 8, color: '#1677ff' }} />
               OrgBrain Agent
             </Title>
-            <Text type="secondary">Ask anything about your bank's data. Powered by local LLMs — no data leaves the platform.</Text>
+            <Text type="secondary">Ask anything about your organization's data. Powered by local LLMs — no data leaves the platform.</Text>
           </Col>
           <Col>
             <Button icon={<ReloadOutlined />} onClick={() => setMessages([])}>Clear</Button>
@@ -184,7 +184,7 @@ export default function Agent() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask about customers, transactions, products, risk… (Enter to send, Shift+Enter for newline)"
+            placeholder="Ask about entities, events, signals, relationships… (Enter to send, Shift+Enter for newline)"
             autoSize={{ minRows: 1, maxRows: 4 }}
             style={{ background: '#0d0d1a', borderColor: '#1f1f2e', color: '#e8e8e8' }}
             disabled={loading}
@@ -225,9 +225,9 @@ export default function Agent() {
               { name: 'graph_query',              color: 'blue',    desc: 'Neo4j — entity relationships' },
               { name: 'trend_query',              color: 'green',   desc: 'TimescaleDB — trends & metrics' },
               { name: 'semantic_search',          color: 'purple',  desc: 'Qdrant — behavioral patterns' },
-              { name: 'get_customer_360',         color: 'cyan',    desc: 'Full customer view' },
-              { name: 'list_churn_risk_customers',color: 'orange',  desc: 'Pre-computed churn rankings' },
-              { name: 'product_performance',      color: 'geekblue',desc: 'Product adoption metrics' },
+              { name: 'get_entity_360',           color: 'cyan',    desc: 'Full entity 360 view' },
+              { name: 'list_high_risk_entities',  color: 'orange',  desc: 'Pre-computed risk rankings' },
+              { name: 'signal_performance',       color: 'geekblue',desc: 'Signal scoring metrics' },
             ].map(t => (
               <div key={t.name} style={{ marginBottom: 6 }}>
                 <Tag color={t.color} style={{ fontSize: 10 }}>{t.name}</Tag>

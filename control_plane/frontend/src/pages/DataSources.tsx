@@ -85,10 +85,10 @@ export default function DataSources() {
     { title: 'Connection', content: (
       <>
         <Form.Item name="name" label="Source Name (unique key)" rules={[{ required: true }]}>
-          <Input placeholder="e.g. core_banking" />
+          <Input placeholder="e.g. retail_orders, iot_sensors, crm" />
         </Form.Item>
         <Form.Item name="display_name" label="Display Name" rules={[{ required: true }]}>
-          <Input placeholder="e.g. Core Banking System" />
+          <Input placeholder="e.g. Retail Orders, IoT Sensors, CRM" />
         </Form.Item>
         <Row gutter={12}>
           <Col span={16}>
@@ -103,7 +103,7 @@ export default function DataSources() {
           </Col>
         </Row>
         <Form.Item name="database_name" label="Database Name" rules={[{ required: true }]}>
-          <Input placeholder="e.g. core_banking" />
+          <Input placeholder="e.g. retail_db, sensor_db" />
         </Form.Item>
         <Row gutter={12}>
           <Col span={12}>
@@ -123,10 +123,10 @@ export default function DataSources() {
       <>
         <Form.Item name="topic_prefix" label="Kafka Topic Prefix" rules={[{ required: true }]}
           help="Events will publish to {prefix}.{schema}.{table}">
-          <Input placeholder="e.g. raw.core_banking" />
+          <Input placeholder="e.g. raw.retail, raw.iot" />
         </Form.Item>
         <Form.Item name="tables" label="Tables to Capture (comma-separated)" rules={[{ required: true }]}>
-          <Input.TextArea rows={3} placeholder="customers, accounts, transactions, cards, loans" />
+          <Input.TextArea rows={3} placeholder="e.g. orders, devices, users, events" />
         </Form.Item>
       </>
     )},

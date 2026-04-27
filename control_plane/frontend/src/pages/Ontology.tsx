@@ -20,9 +20,9 @@ const PROPOSAL_STATUS_COLOR: Record<string, string> = {
 const DAG_LABELS: Record<string, string> = {
   relationship_inference:       'Relationship Inference (weekly)',
   entity_enrichment:            'Entity Enrichment (daily)',
-  customer_profile_embeddings:  'Customer Embeddings (weekly)',
-  churn_risk:                   'Churn Risk Scoring (every 6h)',
-  product_adoption:             'Product Adoption (daily)',
+  customer_profile_embeddings:  'Entity Embeddings (weekly)',
+  churn_risk:                   'Risk Scoring (every 6h)',
+  product_adoption:             'Signal Scoring (daily)',
 }
 
 export default function Ontology() {

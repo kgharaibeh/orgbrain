@@ -72,7 +72,7 @@ export default function MainLayout() {
           height: 56,
         }}>
           <Text style={{ color: '#8c8c8c', fontSize: 13 }}>
-            Banking Intelligence Platform — Control Plane
+            Organizational Intelligence Platform — Control Plane
           </Text>
           <Space>
             <Badge status="processing" text={<Text style={{ color: '#52c41a', fontSize: 12 }}>Platform Online</Text>} />

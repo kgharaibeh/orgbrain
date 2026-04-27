@@ -1,7 +1,10 @@
 """
-Relationship Inference Engine
-Samples the Neo4j graph, prompts Ollama to propose new schema extensions,
-parses the structured JSON response, and persists proposals to cp_schema_proposals.
+Relationship Inference Engine — Generic / Domain-Agnostic
+Discovers all node labels in Neo4j dynamically, samples representative nodes
+from each type, then asks Ollama to propose new relationship types or node
+properties. Proposals are persisted to cp_schema_proposals for human review.
+
+Works for any domain: banking, retail, manufacturing, insurance, SaaS, etc.
 """
 
 import json
@@ -22,70 +25,79 @@ OLLAMA_HOST  = os.getenv("OLLAMA_HOST",    "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL",   "llama3.1:8b")
 DATABASE_URL = os.getenv("DATABASE_URL",   "postgresql://orgbrain:orgbrain_secret@postgres:5432/core_banking")
 
-_PROMPT = """You are a banking data ontology expert.
-Below is a live sample of entities and relationships from a bank's Neo4j knowledge graph.
+_PROMPT = """You are a knowledge graph schema expert.
+Below is a sample of entities and relationships from a Neo4j knowledge graph.
+The domain is unknown — reason purely from the data patterns you observe.
 
-=== ENTITY SAMPLE ===
+=== ENTITY TYPES AND SAMPLE NODES ===
 {entity_sample}
 
 === EXISTING RELATIONSHIP TYPES ===
 {existing_relationships}
 
-Your task: propose NEW relationship types or entity properties that would enrich this schema
-based on the data patterns you observe.
+Your task: propose NEW relationship types or node properties that would enrich
+this schema based on the patterns visible in the data.
 
 Rules:
-- Only propose relationships/properties that do NOT already exist above.
-- Each proposed Cypher must be safe to run as a MERGE (idempotent).
-- Confidence 0.0-1.0 based on how clearly the pattern appears in the data.
+- Only propose relationships or properties that do NOT already exist above.
+- Each Cypher must be safe to run as a MERGE (idempotent).
+- Use only node labels and property names that appear in the sample above.
+- Confidence 0.0–1.0 based on how clearly the pattern appears in the data.
+- Do NOT assume any particular domain — derive everything from the data.
 
 Respond ONLY with a valid JSON array. No prose outside the JSON.
 
 [
   {{
     "type": "NEW_RELATIONSHIP",
-    "entity_type": "Customer",
-    "relationship_type": "FREQUENTLY_SHOPS_AT",
-    "target_entity": "Merchant",
-    "cypher": "MATCH (c:Customer)-[:HAS_TX]->(:Transaction)-[:AT]->(m:Merchant) WITH c, m, count(*) AS freq WHERE freq >= 5 MERGE (c)-[r:FREQUENTLY_SHOPS_AT]->(m) SET r.frequency = freq",
-    "rationale": "Identifies merchant loyalty patterns for targeted offers",
-    "confidence": 0.85
+    "entity_type": "<source label from sample>",
+    "relationship_type": "<SNAKE_CASE_REL_NAME>",
+    "target_entity": "<target label from sample>",
+    "cypher": "<idempotent MERGE Cypher using only labels/properties from the sample>",
+    "rationale": "<one sentence: why this pattern is useful>",
+    "confidence": 0.0
   }}
 ]
 
 Proposals:"""
 
 
-def _sample_graph(driver: GraphDatabase.driver) -> dict:
+def _sample_graph(driver) -> dict:
+    """Discover all node labels dynamically and sample representative nodes from each."""
     with driver.session() as s:
-        customers = s.run(
-            "MATCH (c:Customer) RETURN c.customer_id AS id, c.income_band AS income, "
-            "c.risk_rating AS risk, c.occupation AS occ LIMIT 5"
-        ).data()
+        labels = [r["label"] for r in s.run(
+            "CALL db.labels() YIELD label RETURN label"
+        ).data()]
 
-        transactions = s.run(
-            "MATCH (t:Transaction) RETURN t.amount AS amount, t.channel AS channel, "
-            "t.status AS status, t.merchant_mcc AS mcc LIMIT 10"
-        ).data()
+        entity_samples = {}
+        for label in labels:
+            nodes = s.run(
+                f"MATCH (n:`{label}`) RETURN n LIMIT 3"
+            ).data()
+            entity_samples[label] = [
+                {k: v for k, v in dict(row["n"]).items()
+                 if v is not None and isinstance(v, (str, int, float, bool))
+                 and k not in ("summary", "updated_at")}
+                for row in nodes
+            ]
 
         rel_types = s.run(
             "MATCH ()-[r]->() RETURN DISTINCT type(r) AS rel_type, count(r) AS cnt "
-            "ORDER BY cnt DESC LIMIT 20"
+            "ORDER BY cnt DESC LIMIT 30"
         ).data()
 
         try:
-            stats = s.run("CALL apoc.meta.stats() YIELD labels RETURN labels").data()
-        except Exception:
             stats = s.run(
-                "MATCH (n) RETURN labels(n)[0] AS label, count(n) AS cnt "
-                "GROUP BY labels(n)[0] ORDER BY cnt DESC"
-            ).data()
+                "CALL apoc.meta.stats() YIELD labels RETURN labels"
+            ).single()
+            label_counts = stats["labels"] if stats else {}
+        except Exception:
+            label_counts = {label: len(entity_samples.get(label, [])) for label in labels}
 
     return {
-        "customer_sample":   customers,
-        "transaction_sample": transactions,
+        "entity_samples":     entity_samples,
         "relationship_types": rel_types,
-        "graph_stats":        stats,
+        "label_counts":       label_counts,
     }
 
 
@@ -147,19 +159,24 @@ def _save_proposals(proposals: list, dag_run_id: str, source_dag: str, conn) -> 
 
 
 def run_inference(dag_run_id: str = "manual") -> int:
-    """Sample graph → prompt Ollama → persist proposals. Returns count saved."""
+    """Discover graph structure → prompt Ollama → persist proposals. Returns count saved."""
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
     conn   = psycopg2.connect(DATABASE_URL)
     try:
-        sample       = _sample_graph(driver)
-        existing     = [r["rel_type"] for r in sample.get("relationship_types", [])]
-        existing_str = ", ".join(existing) or "HOLDS, HAS_TX, AT, HAS_CARD, HAS_LOAN"
+        sample   = _sample_graph(driver)
+        existing = [r["rel_type"] for r in sample.get("relationship_types", [])]
+        existing_str = ", ".join(existing) if existing else "(none yet)"
+
+        # Truncate entity sample to keep prompt under ~3000 chars
+        entity_str = json.dumps(sample["entity_samples"], indent=2)[:3000]
+
         prompt = _PROMPT.format(
-            entity_sample=json.dumps(sample, indent=2)[:3000],
+            entity_sample=entity_str,
             existing_relationships=existing_str,
         )
-        log.info("Calling Ollama for relationship inference (model=%s)…", OLLAMA_MODEL)
-        raw      = _call_ollama(prompt)
+        log.info("Calling Ollama for relationship inference (model=%s, labels=%s)...",
+                 OLLAMA_MODEL, list(sample["entity_samples"].keys()))
+        raw       = _call_ollama(prompt)
         proposals = _extract_json_array(raw)
         log.info("LLM returned %d proposals", len(proposals))
         return _save_proposals(proposals, dag_run_id, "relationship_inference", conn)

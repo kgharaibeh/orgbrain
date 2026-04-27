@@ -1,0 +1,11 @@
+{
+  "_comment": "Maps local data file names to Kafka raw/clean topic pairs. Replace this file for any domain.",
+  "source_name": "core_banking",
+  "topics": {
+    "customers.json":    {"raw": "raw.core_banking.public.customers",    "clean": "clean.core_banking.customers"},
+    "accounts.json":     {"raw": "raw.core_banking.public.accounts",     "clean": "clean.core_banking.accounts"},
+    "transactions.json": {"raw": "raw.core_banking.public.transactions",  "clean": "clean.core_banking.transactions"},
+    "cards.json":        {"raw": "raw.core_banking.public.cards",        "clean": "clean.core_banking.cards"},
+    "loans.json":        {"raw": "raw.core_banking.public.loans",        "clean": "clean.core_banking.loans"}
+  }
+}

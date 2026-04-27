@@ -129,24 +129,32 @@ class PIIAnonymizeFunction(RichMapFunction):
         return json.dumps(output)
 
 
+def _find_primary_id(payload: dict):
+    """Return the value of the first *_id field found — domain-agnostic primary key."""
+    for k, v in payload.items():
+        if k.endswith("_id") and v is not None:
+            return str(v)
+    return payload.get("id")
+
+
 class AuditEmitFunction(RichMapFunction):
-    """Emits a lightweight audit record for each anonymized event."""
+    """Emits a lightweight audit record for each anonymized event (domain-agnostic)."""
 
     def __init__(self, raw_topic: str):
         self._raw_topic = raw_topic
 
     def map(self, value: str) -> str:
         try:
-            record = json.loads(value)
-            payload = record.get("payload", {})
+            record     = json.loads(value)
+            payload    = record.get("payload", {})
             governance = record.get("_governance", {})
             audit = {
                 "source_topic": self._raw_topic,
-                "entity_id": payload.get("customer_id") or payload.get("tx_id") or payload.get("loan_id"),
-                "op": payload.get("__op", "r"),
-                "anonymized": governance.get("anonymized", False),
+                "entity_id":    _find_primary_id(payload),
+                "op":           payload.get("__op", "r"),
+                "anonymized":   governance.get("anonymized", False),
                 "processed_at": governance.get("processed_at"),
-                "field_count": len(payload),
+                "field_count":  len(payload),
             }
             return json.dumps(audit)
         except Exception as e:

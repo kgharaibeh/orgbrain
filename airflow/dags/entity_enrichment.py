@@ -21,7 +21,7 @@ default_args = {
 
 with DAG(
     dag_id="entity_enrichment",
-    description="Daily LLM enrichment of Customer and Merchant nodes in Neo4j",
+    description="Daily LLM enrichment of all entity nodes in Neo4j (domain-agnostic)",
     schedule_interval="0 1 * * *",  # 01:00 daily
     start_date=datetime(2024, 1, 1),
     catchup=False,

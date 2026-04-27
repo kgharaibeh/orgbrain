@@ -1,36 +1,49 @@
 import { useEffect, useState } from 'react'
 import {
   Row, Col, Card, Table, Button, Space, Typography, Statistic,
-  Tabs, Tag, Badge, message, Spin,
+  Tabs, Tag, Badge, message, Spin, Select,
 } from 'antd'
 import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { brainApi } from '../services/api'
 
 const { Title, Text } = Typography
 
+const SCORE_COLOR = (score: number) => {
+  if (score >= 0.8) return 'red'
+  if (score >= 0.6) return 'orange'
+  if (score >= 0.4) return 'gold'
+  return 'green'
+}
+
 export default function Brain() {
   const [stats,    setStats]    = useState<any>({})
   const [entities, setEntities] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
-  const [churn,    setChurn]    = useState<any[]>([])
+  const [signals,  setSignals]  = useState<any[]>([])
+  const [sigType,  setSigType]  = useState<string | undefined>(undefined)
   const [loading,  setLoading]  = useState(true)
 
-  const load = async () => {
+  const load = async (signalType?: string) => {
     setLoading(true)
-    const [s, e, a, c] = await Promise.allSettled([
+    const [s, e, a, sig] = await Promise.allSettled([
       brainApi.stats(),
       brainApi.entityCounts(),
       brainApi.recentActivity(),
-      brainApi.churnRisk(),
+      brainApi.signals(signalType),
     ])
-    if (s.status === 'fulfilled') setStats(s.value.data)
-    if (e.status === 'fulfilled') setEntities(e.value.data)
-    if (a.status === 'fulfilled') setActivity(a.value.data)
-    if (c.status === 'fulfilled') setChurn(c.value.data)
+    if (s.status   === 'fulfilled') setStats(s.value.data)
+    if (e.status   === 'fulfilled') setEntities(e.value.data)
+    if (a.status   === 'fulfilled') setActivity(a.value.data)
+    if (sig.status === 'fulfilled') setSignals(sig.value.data)
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  const onSigTypeChange = (v: string | undefined) => {
+    setSigType(v)
+    load(v)
+  }
 
   const initQdrant = async () => {
     const r = await brainApi.initQdrant()
@@ -42,10 +55,14 @@ export default function Brain() {
     message.success('Neo4j schema applied')
   }
 
-  const graph    = stats.graph    || {}
-  const vector   = stats.vector   || {}
-  const ts       = stats.timeseries || {}
-  const llm      = stats.llm      || {}
+  const graph  = stats.graph      || {}
+  const vector = stats.vector     || {}
+  const ts     = stats.timeseries || {}
+  const llm    = stats.llm        || {}
+  const sig    = ts.signals       || {}
+
+  // Derive unique signal types from loaded rows for the filter dropdown
+  const sigTypes = [...new Set<string>(signals.map((r: any) => r.signal_type))].sort()
 
   const tabItems = [
     {
@@ -55,12 +72,12 @@ export default function Brain() {
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Row gutter={16}>
             {[
-              { title: 'Graph Nodes',      value: graph.node_count ?? '—',   color: '#1677ff', store: 'Neo4j' },
-              { title: 'Graph Edges',      value: graph.rel_count ?? '—',    color: '#722ed1', store: 'Neo4j' },
-              { title: 'Vector Points',    value: vector.collections?.reduce((a: number, c: any) => a + (c.vector_count || 0), 0) ?? '—', color: '#13c2c2', store: 'Qdrant' },
-              { title: 'TX Events',        value: ts.tx_event_count ?? '—',  color: '#52c41a', store: 'TimescaleDB' },
-              { title: 'Unique Customers', value: ts.unique_customers ?? '—',color: '#fa8c16', store: 'TimescaleDB' },
-              { title: 'Churn Alerts',     value: ts.churn_risk_count ?? '—',color: '#f5222d', store: 'TimescaleDB' },
+              { title: 'Graph Nodes',    value: graph.node_count ?? '—',    color: '#1677ff', store: 'Neo4j' },
+              { title: 'Graph Edges',    value: graph.rel_count ?? '—',     color: '#722ed1', store: 'Neo4j' },
+              { title: 'Vector Points',  value: vector.collections?.reduce((a: number, c: any) => a + (c.vector_count || 0), 0) ?? '—', color: '#13c2c2', store: 'Qdrant' },
+              { title: 'Brain Events',   value: ts.total_events ?? '—',     color: '#52c41a', store: 'TimescaleDB' },
+              { title: 'Unique Entities',value: ts.unique_entities ?? '—',  color: '#fa8c16', store: 'TimescaleDB' },
+              { title: 'Active Signals', value: sig.total_signals ?? '—',   color: '#f5222d', store: 'TimescaleDB' },
             ].map(k => (
               <Col span={4} key={k.title}>
                 <Card size="small" style={{ background: '#0d0d1a', border: '1px solid #1f1f2e' }}>
@@ -73,12 +90,11 @@ export default function Brain() {
           </Row>
 
           <Row gutter={16}>
-            {/* Store health cards */}
             {[
-              { label: 'Neo4j Graph Store',      data: graph,  extra: `${graph.node_count ?? 0} nodes` },
-              { label: 'Qdrant Vector Store',     data: vector, extra: `${vector.collections?.length ?? 0} collections` },
-              { label: 'TimescaleDB Timeseries',  data: ts,     extra: `${ts.risk_signal_count ?? 0} risk signals` },
-              { label: 'Ollama LLM',              data: llm,    extra: llm.models?.map((m: any) => m.name).join(', ') || '—' },
+              { label: 'Neo4j Graph Store',     data: graph,  extra: `${graph.node_count ?? 0} nodes` },
+              { label: 'Qdrant Vector Store',    data: vector, extra: `${vector.collections?.length ?? 0} collections` },
+              { label: 'TimescaleDB Timeseries', data: ts,     extra: `${ts.total_events ?? 0} events · ${sig.signal_types ?? 0} signal types` },
+              { label: 'Ollama LLM',             data: llm,    extra: llm.models?.map((m: any) => m.name).join(', ') || '—' },
             ].map(b => (
               <Col span={6} key={b.label}>
                 <Card size="small" style={{ background: '#0d0d1a', border: `1px solid ${b.data.status === 'healthy' ? '#1f3a1f' : '#3a1f1f'}` }}>
@@ -91,12 +107,8 @@ export default function Brain() {
           </Row>
 
           <Row gutter={12}>
-            <Col>
-              <Button icon={<ThunderboltOutlined />} onClick={initNeo4j}>Apply Neo4j Schema</Button>
-            </Col>
-            <Col>
-              <Button icon={<ThunderboltOutlined />} onClick={initQdrant}>Init Qdrant Collections</Button>
-            </Col>
+            <Col><Button icon={<ThunderboltOutlined />} onClick={initNeo4j}>Apply Neo4j Schema</Button></Col>
+            <Col><Button icon={<ThunderboltOutlined />} onClick={initQdrant}>Init Qdrant Collections</Button></Col>
           </Row>
         </Space>
       ),
@@ -119,41 +131,65 @@ export default function Brain() {
     },
     {
       key: 'activity',
-      label: 'Recent Transactions',
+      label: 'Recent Activity',
       children: (
         <Table
-          dataSource={activity} rowKey="tx_id" size="small"
+          dataSource={activity} rowKey="entity_id" size="small"
           columns={[
-            { title: 'TX ID', dataIndex: 'tx_id', render: (v: string) => <Text code style={{ fontSize: 11 }}>{v?.slice(0, 16)}…</Text> },
-            { title: 'Amount', dataIndex: 'amount', render: (v: number) => <Text>{v?.toLocaleString()} AED</Text> },
-            { title: 'Direction', dataIndex: 'direction', render: (v: string) => <Tag color={v === 'DEBIT' ? 'red' : 'green'}>{v}</Tag> },
-            { title: 'Channel', dataIndex: 'channel', render: (v: string) => <Tag>{v}</Tag> },
-            { title: 'MCC', dataIndex: 'mcc', render: (v: string) => <Text type="secondary">{v || '—'}</Text> },
+            { title: 'Entity Type', dataIndex: 'entity_type',
+              render: (v: string) => <Tag color="blue">{v}</Tag> },
+            { title: 'Entity ID', dataIndex: 'entity_id',
+              render: (v: string) => <Text code style={{ fontSize: 11 }}>{v?.slice(0, 20)}{v?.length > 20 ? '…' : ''}</Text> },
+            { title: 'Last Updated', dataIndex: 'updated_at',
+              render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v ? new Date(v).toLocaleString() : '—'}</Text>,
+              sorter: (a: any, b: any) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
+              defaultSortOrder: 'descend' as any,
+            },
+            { title: 'Summary', dataIndex: 'summary',
+              render: (v: string) => <Text type="secondary" style={{ fontSize: 11 }}>{v || '—'}</Text> },
           ]}
         />
       ),
     },
     {
-      key: 'churn',
-      label: 'Churn Risk',
+      key: 'signals',
+      label: 'Signals',
       children: (
-        <Table
-          dataSource={churn} rowKey="customer_id" size="small"
-          columns={[
-            { title: 'Customer (anon)', dataIndex: 'customer_id', render: (v: string) => <Text code style={{ fontSize: 11 }}>{v}</Text> },
-            { title: 'Churn Score', dataIndex: 'churn_score',
-              render: (v: number) => {
-                const pct = Math.round(v * 100)
-                return <Tag color={pct > 80 ? 'red' : pct > 60 ? 'orange' : 'yellow'}>{pct}%</Tag>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Row align="middle" gutter={8}>
+            <Col><Text type="secondary">Filter by signal type:</Text></Col>
+            <Col>
+              <Select
+                allowClear placeholder="All signal types" style={{ width: 200 }}
+                value={sigType} onChange={onSigTypeChange}
+                options={sigTypes.map(t => ({ value: t, label: t }))}
+              />
+            </Col>
+          </Row>
+          <Table
+            dataSource={signals} rowKey={(r: any) => `${r.entity_type}-${r.entity_id}-${r.signal_type}`} size="small"
+            columns={[
+              { title: 'Entity Type', dataIndex: 'entity_type',
+                render: (v: string) => <Tag color="blue">{v}</Tag> },
+              { title: 'Entity ID', dataIndex: 'entity_id',
+                render: (v: string) => <Text code style={{ fontSize: 11 }}>{v?.slice(0, 20)}{v?.length > 20 ? '…' : ''}</Text> },
+              { title: 'Signal', dataIndex: 'signal_type',
+                render: (v: string) => <Tag>{v}</Tag> },
+              { title: 'Score', dataIndex: 'score',
+                render: (v: number) => {
+                  const pct = Math.round(v * 100)
+                  return <Tag color={SCORE_COLOR(v)}>{pct}%</Tag>
+                },
+                sorter: (a: any, b: any) => b.score - a.score,
+                defaultSortOrder: 'ascend' as any,
               },
-              sorter: (a: any, b: any) => b.churn_score - a.churn_score,
-              defaultSortOrder: 'ascend' as any,
-            },
-            { title: 'Days Inactive', dataIndex: 'days_inactive',
-              render: (v: number) => <Text style={{ color: v > 60 ? '#f5222d' : '#e8e8e8' }}>{v}</Text> },
-            { title: 'Products', dataIndex: 'product_count' },
-          ]}
-        />
+              { title: 'Source DAG', dataIndex: 'source_dag',
+                render: (v: string) => <Text type="secondary" style={{ fontSize: 11 }}>{v || '—'}</Text> },
+              { title: 'Time', dataIndex: 'time',
+                render: (v: string) => <Text type="secondary" style={{ fontSize: 11 }}>{v ? new Date(v).toLocaleString() : '—'}</Text> },
+            ]}
+          />
+        </Space>
       ),
     },
     {
@@ -178,10 +214,10 @@ export default function Brain() {
       <Row justify="space-between" align="middle">
         <Col>
           <Title level={4} style={{ margin: 0, color: '#fff' }}>Brain Monitor</Title>
-          <Text type="secondary">Knowledge graph, vector store, timeseries, and LLM health.</Text>
+          <Text type="secondary">Knowledge graph, vector store, time-series signals, and LLM health.</Text>
         </Col>
         <Col>
-          <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
+          <Button icon={<ReloadOutlined />} onClick={() => load(sigType)} loading={loading}>Refresh</Button>
         </Col>
       </Row>
 

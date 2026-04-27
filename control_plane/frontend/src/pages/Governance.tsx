@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
   Row, Col, Card, Table, Button, Form, Input, Select, Switch,
-  Space, Tag, Typography, Modal, Drawer, Tabs, Popconfirm, message,
-  Tooltip, Badge,
+  Space, Tag, Typography, Modal, Tabs, Popconfirm, message,
+  Badge,
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { governanceApi } from '../services/api'
@@ -28,15 +28,17 @@ const VAULT_KEYS = [
 ]
 
 export default function Governance() {
-  const [sources,   setSources]   = useState<any[]>([])
-  const [rules,     setRules]     = useState<any[]>([])
-  const [selSource, setSelSource] = useState<any>(null)
-  const [loading,   setLoading]   = useState(true)
+  const [sources,      setSources]      = useState<any[]>([])
+  const [rules,        setRules]        = useState<any[]>([])
+  const [selSource,    setSelSource]    = useState<any>(null)
+  const [loading,      setLoading]      = useState(true)
   const [rulesLoading, setRulesLoading] = useState(false)
-  const [ruleModal, setRuleModal] = useState(false)
-  const [editRule,  setEditRule]  = useState<any>(null)
-  const [auditRows, setAuditRows] = useState<any[]>([])
-  const [form]                    = Form.useForm()
+  const [ruleModal,    setRuleModal]    = useState(false)
+  const [sourceModal,  setSourceModal]  = useState(false)
+  const [editRule,     setEditRule]     = useState<any>(null)
+  const [auditRows,    setAuditRows]    = useState<any[]>([])
+  const [form]                          = Form.useForm()
+  const [sourceForm]                    = Form.useForm()
 
   const loadSources = async () => {
     setLoading(true)
@@ -93,6 +95,19 @@ export default function Governance() {
     loadRules(selSource)
   }
 
+  const saveSource = async () => {
+    const vals = await sourceForm.validateFields()
+    try {
+      await governanceApi.createSource(vals)
+      message.success('Data source created')
+      setSourceModal(false)
+      sourceForm.resetFields()
+      loadSources()
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || 'Save failed')
+    }
+  }
+
   const ruleColumns = [
     { title: 'Field', dataIndex: 'field_name', render: (v: string) => <Text code>{v}</Text> },
     { title: 'Method', dataIndex: 'method',
@@ -140,6 +155,11 @@ export default function Governance() {
       children: (
         <Row gutter={16}>
           <Col span={selSource ? 8 : 24}>
+            <div style={{ marginBottom: 8 }}>
+              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setSourceModal(true)}>
+                Add Data Source
+              </Button>
+            </div>
             <Table columns={sourceColumns} dataSource={sources} rowKey="id"
               loading={loading} size="small"
               onRow={r => ({ onClick: () => loadRules(r), style: { cursor: 'pointer' } })}
@@ -226,7 +246,7 @@ export default function Governance() {
       >
         <Form form={form} layout="vertical">
           <Form.Item name="field_name" label="Field Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g. customer_id" />
+            <Input placeholder="e.g. email_address, phone_number, full_name" />
           </Form.Item>
           <Form.Item name="field_pattern" label="Field Pattern (optional regex)">
             <Input placeholder="e.g. .*_id$ — matches any field ending in _id" />
@@ -267,6 +287,33 @@ export default function Governance() {
           </Row>
           <Form.Item name="notes" label="Notes">
             <Input.TextArea rows={2} placeholder="Why this method was chosen" />
+          </Form.Item>
+        </Form>
+      </Modal>
+      {/* Add data source modal */}
+      <Modal
+        title="Add Data Source"
+        open={sourceModal}
+        onOk={saveSource}
+        onCancel={() => { setSourceModal(false); sourceForm.resetFields() }}
+        okText="Create"
+        width={520}
+      >
+        <Form form={sourceForm} layout="vertical">
+          <Form.Item name="source_name" label="Source Name" rules={[{ required: true }]}>
+            <Input placeholder="e.g. core_banking, retail_orders, iot_sensors" />
+          </Form.Item>
+          <Form.Item name="entity_type" label="Primary Entity Type">
+            <Input placeholder="e.g. Customer, Order, Device, Employee" />
+          </Form.Item>
+          <Form.Item name="raw_topic_prefix" label="Raw Kafka Topic Prefix" rules={[{ required: true }]}>
+            <Input placeholder="e.g. raw.retail.public" />
+          </Form.Item>
+          <Form.Item name="clean_topic_prefix" label="Clean Kafka Topic Prefix" rules={[{ required: true }]}>
+            <Input placeholder="e.g. clean.retail" />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={2} placeholder="What data does this source contain?" />
           </Form.Item>
         </Form>
       </Modal>

@@ -51,13 +51,15 @@ export const governanceApi = {
 
 // ── Brain ─────────────────────────────────────────────────────────────────────
 export const brainApi = {
-  stats:           ()          => api.get('/brain/stats'),
-  entityCounts:    ()          => api.get('/brain/graph/entity-counts'),
-  recentActivity:  (limit = 20)=> api.get(`/brain/graph/recent-activity?limit=${limit}`),
-  churnRisk:       (limit = 50)=> api.get(`/brain/timeseries/churn-risk?limit=${limit}`),
-  spendTrends:     (days = 7)  => api.get(`/brain/timeseries/spend-trends?days=${days}`),
-  initQdrant:      ()          => api.post('/brain/qdrant/init-collections'),
-  initNeo4j:       ()          => api.post('/brain/neo4j/init-schema'),
+  stats:          ()                          => api.get('/brain/stats'),
+  entityCounts:   ()                          => api.get('/brain/graph/entity-counts'),
+  recentActivity: (limit = 20)                => api.get(`/brain/graph/recent-activity?limit=${limit}`),
+  signals:        (signalType?: string, limit = 50) =>
+    api.get('/brain/timeseries/signals', { params: { ...(signalType ? { signal_type: signalType } : {}), limit } }),
+  highRisk:       (limit = 50)                => api.get(`/brain/timeseries/high-risk?limit=${limit}`),
+  activity:       ()                          => api.get('/brain/timeseries/activity'),
+  initQdrant:     ()                          => api.post('/brain/qdrant/init-collections'),
+  initNeo4j:      ()                          => api.post('/brain/neo4j/init-schema'),
 }
 
 // ── Jobs ──────────────────────────────────────────────────────────────────────

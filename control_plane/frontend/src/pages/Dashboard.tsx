@@ -63,7 +63,7 @@ export default function Dashboard() {
       <Row justify="space-between" align="middle">
         <Col>
           <Title level={4} style={{ margin: 0, color: '#fff' }}>Platform Dashboard</Title>
-          <Text type="secondary">Banking Intelligence Platform — real-time health overview</Text>
+          <Text type="secondary">Organizational Intelligence Platform — real-time health overview</Text>
         </Col>
         <Col>
           <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
@@ -77,7 +77,7 @@ export default function Dashboard() {
           { title: 'Degraded',          value: degraded,                    color: degraded > 0 ? '#f5222d' : '#52c41a' },
           { title: 'Graph Nodes',       value: graph.node_count ?? '—',     color: '#1677ff' },
           { title: 'Vector Embeddings', value: vector.collections?.reduce((a: number, c: any) => a + (c.vector_count || 0), 0) ?? '—', color: '#722ed1' },
-          { title: 'Churn Risk Alerts', value: ts.churn_risk_count ?? '—',  color: '#fa8c16' },
+          { title: 'Active Signals',    value: ts.signals?.total_signals ?? '—', color: '#fa8c16' },
           { title: 'Flink Jobs Running',value: flinkInfo.jobs_running ?? '—',color: '#13c2c2' },
         ].map(k => (
           <Col span={4} key={k.title}>
@@ -148,7 +148,7 @@ export default function Dashboard() {
               {[
                 { label: 'Neo4j Graph',    status: graph.status,    detail: `${graph.node_count ?? 0} nodes / ${graph.rel_count ?? 0} edges` },
                 { label: 'Qdrant Vectors', status: vector.status,   detail: `${vector.collections?.length ?? 0} collections` },
-                { label: 'TimescaleDB',    status: ts.status,       detail: `${ts.tx_event_count ?? 0} events, ${ts.unique_customers ?? 0} customers` },
+                { label: 'TimescaleDB',    status: ts.status,       detail: `${ts.total_events ?? 0} events · ${ts.entity_types ?? 0} entity types` },
               ].map(b => (
                 <Row key={b.label} justify="space-between" style={{ marginBottom: 8 }}>
                   <Col><Badge status={b.status === 'healthy' ? 'success' : 'error'} text={<Text style={{ fontSize: 13 }}>{b.label}</Text>} /></Col>

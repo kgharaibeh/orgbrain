@@ -368,23 +368,107 @@ class DBQueryRequest(BaseModel):
     apply_rules: bool = False
 
 
+# ── Unified DB fetch helper ────────────────────────────────────────────────────
+
+def _db_fetch(db_type: str, host: str, port: int, database: str,
+              username: str, password: str, query: str,
+              preview: bool = False) -> tuple:
+    """
+    Connect to PostgreSQL, MySQL, or Oracle; run query; return (rows, total).
+    preview=True fetches only the first 20 rows and estimates total with COUNT(*).
+    """
+    lower = db_type.lower()
+
+    if lower == "postgresql":
+        try:
+            conn = psycopg2.connect(
+                host=host, port=port, dbname=database,
+                user=username, password=password, connect_timeout=10,
+            )
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(query)
+            rows = [dict(r) for r in (cur.fetchmany(20) if preview else cur.fetchall())]
+            if preview:
+                cur.execute(f"SELECT COUNT(*) FROM ({query}) _q")
+                total = cur.fetchone()[0]
+            else:
+                total = len(rows)
+            cur.close()
+            conn.close()
+        except psycopg2.Error as e:
+            raise HTTPException(400, f"PostgreSQL error: {e}")
+
+    elif lower == "mysql":
+        try:
+            import pymysql
+            import pymysql.cursors
+            conn = pymysql.connect(
+                host=host, port=port, database=database,
+                user=username, password=password,
+                connect_timeout=10,
+                cursorclass=pymysql.cursors.DictCursor,
+            )
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = list(cur.fetchmany(20) if preview else cur.fetchall())
+            if preview:
+                with conn.cursor() as cur:
+                    cur.execute(f"SELECT COUNT(*) AS cnt FROM ({query}) _q")
+                    total = cur.fetchone()["cnt"]
+            else:
+                total = len(rows)
+            conn.close()
+        except Exception as e:
+            raise HTTPException(400, f"MySQL error: {e}")
+
+    elif lower == "oracle":
+        try:
+            import oracledb
+            conn = oracledb.connect(
+                user=username, password=password,
+                dsn=f"{host}:{port}/{database}",
+            )
+            cur = conn.cursor()
+            cur.execute(query)
+            cols = [d[0].lower() for d in cur.description]
+            rows = [dict(zip(cols, row))
+                    for row in (cur.fetchmany(20) if preview else cur.fetchall())]
+            if preview:
+                cur.execute(f"SELECT COUNT(*) FROM ({query})")
+                total = cur.fetchone()[0]
+            else:
+                total = len(rows)
+            cur.close()
+            conn.close()
+        except Exception as e:
+            raise HTTPException(400, f"Oracle error: {e}")
+
+    else:
+        raise HTTPException(400, f"Unsupported DB type '{db_type}'. Use postgresql, mysql, or oracle.")
+
+    # Coerce all values to JSON-safe primitives (Oracle can return Decimal/Date types)
+    safe_rows = []
+    for row in rows:
+        safe_row: dict = {}
+        for k, v in row.items():
+            if v is None or isinstance(v, (str, int, float, bool)):
+                safe_row[k] = v
+            else:
+                safe_row[k] = str(v)
+        safe_rows.append(safe_row)
+
+    return safe_rows, total
+
+
+# ── Query preview ──────────────────────────────────────────────────────────────
+
 @router.post("/preview/query")
 def preview_query(payload: DBQueryRequest):
-    """Test DB connection + query, return first 20 rows and total count."""
-    try:
-        conn = psycopg2.connect(
-            host=payload.host, port=payload.port, dbname=payload.database,
-            user=payload.username, password=payload.password, connect_timeout=10,
-        )
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(payload.query)
-        rows = [dict(r) for r in cur.fetchmany(20)]
-        cur.execute(f"SELECT COUNT(*) FROM ({payload.query}) _q")
-        total = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-    except psycopg2.Error as e:
-        raise HTTPException(400, f"Query failed: {e}")
+    """Test connection + query for any supported DB; return first 20 rows and total count."""
+    rows, total = _db_fetch(
+        payload.db_type, payload.host, payload.port, payload.database,
+        payload.username, payload.password, payload.query, preview=True,
+    )
     columns = list(rows[0].keys()) if rows else []
     return {"columns": columns, "preview": rows, "total": total}
 
@@ -397,19 +481,11 @@ def ingest_query(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Run a SELECT query on a PostgreSQL database and ingest into brain stores."""
-    try:
-        conn = psycopg2.connect(
-            host=payload.host, port=payload.port, dbname=payload.database,
-            user=payload.username, password=payload.password, connect_timeout=10,
-        )
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(payload.query)
-        records = [dict(r) for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-    except psycopg2.Error as e:
-        raise HTTPException(400, f"Query failed: {e}")
+    """Run a SELECT query on PostgreSQL, MySQL, or Oracle and ingest into brain stores."""
+    records, _ = _db_fetch(
+        payload.db_type, payload.host, payload.port, payload.database,
+        payload.username, payload.password, payload.query, preview=False,
+    )
 
     rules = []
     if payload.apply_rules and payload.source_name:

@@ -43,6 +43,7 @@ export default function DataLoad() {
   const [queryPreview,  setQueryPreview]  = useState<any>(null)
   const [queryPreviewing, setQueryPreviewing] = useState(false)
   const [queryIngesting, setQueryIngesting] = useState(false)
+  const [dbType,        setDbType]        = useState('postgresql')
 
   useEffect(() => {
     governanceApi.listSources().then(r => setSources(r.data)).catch(() => {})
@@ -346,14 +347,23 @@ export default function DataLoad() {
                 <Row gutter={12}>
                   <Col span={6}>
                     <Form.Item name="db_type" label="DB Type" initialValue="postgresql">
-                      <Select>
+                      <Select
+                        onChange={(v: string) => {
+                          setDbType(v)
+                          setQueryPreview(null)
+                          const defaultPort = v === 'mysql' ? 3306 : v === 'oracle' ? 1521 : 5432
+                          qForm.setFieldValue('port', defaultPort)
+                        }}
+                      >
                         <Select.Option value="postgresql">PostgreSQL</Select.Option>
+                        <Select.Option value="mysql">MySQL / MariaDB</Select.Option>
+                        <Select.Option value="oracle">Oracle DB</Select.Option>
                       </Select>
                     </Form.Item>
                   </Col>
                   <Col span={10}>
                     <Form.Item name="host" label="Host" rules={[{ required: true }]}>
-                      <Input placeholder="e.g. postgres or 10.0.0.1" />
+                      <Input placeholder="hostname or IP address" />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
@@ -365,8 +375,16 @@ export default function DataLoad() {
                 </Row>
                 <Row gutter={12}>
                   <Col span={8}>
-                    <Form.Item name="database" label="Database" rules={[{ required: true }]}>
-                      <Input placeholder="e.g. core_banking" />
+                    <Form.Item
+                      name="database"
+                      label={dbType === 'oracle' ? 'Service Name / SID' : 'Database'}
+                      rules={[{ required: true }]}
+                    >
+                      <Input placeholder={
+                        dbType === 'oracle' ? 'e.g. ORCL or orclpdb1'
+                        : dbType === 'mysql' ? 'e.g. mydb'
+                        : 'e.g. core_banking'
+                      } />
                     </Form.Item>
                   </Col>
                   <Col span={8}>

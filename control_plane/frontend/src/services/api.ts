@@ -93,5 +93,16 @@ export const ontologyApi = {
 
 // ── Platform ──────────────────────────────────────────────────────────────────
 export const platformApi = {
-  urls: () => api.get('/platform/urls'),
+  urls:   ()                     => api.get('/platform/urls'),
+  reset:  (clearAudit = false)   => api.post(`/platform/reset?clear_audit=${clearAudit}`),
+}
+
+// ── Bulk Ingest ───────────────────────────────────────────────────────────────
+export const ingestApi = {
+  previewFile:  (form: FormData)  => api.post('/ingest/preview/file',  form),
+  ingestFile:   (form: FormData)  => api.post('/ingest/file',          form),
+  previewQuery: (data: any)       => api.post('/ingest/preview/query', data),
+  ingestQuery:  (data: any)       => api.post('/ingest/query',         data),
+  listJobs:     ()                => api.get('/ingest/jobs'),
+  getJob:       (jobId: string)   => api.get(`/ingest/jobs/${jobId}`),
 }

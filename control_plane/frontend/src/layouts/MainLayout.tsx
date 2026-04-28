@@ -5,7 +5,7 @@ import {
   DashboardOutlined, CloudServerOutlined, ApiOutlined,
   SafetyOutlined, UnorderedListOutlined,
   ThunderboltOutlined, RobotOutlined, ExperimentOutlined,
-  BranchesOutlined,
+  BranchesOutlined, UploadOutlined,
 } from '@ant-design/icons'
 
 const { Sider, Content, Header } = Layout
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { key: '/sources',    icon: <ApiOutlined />,            label: 'Data Sources' },
   { key: '/governance', icon: <SafetyOutlined />,         label: 'Governance / PII' },
   { key: '/topics',     icon: <UnorderedListOutlined />,  label: 'Kafka Topics' },
+  { key: '/dataload',   icon: <UploadOutlined />,         label: 'Bulk Load' },
   { key: '/brain',      icon: <ExperimentOutlined />,     label: 'Brain Monitor' },
   { key: '/jobs',       icon: <ThunderboltOutlined />,    label: 'Flink Jobs' },
   { key: '/ontology',   icon: <BranchesOutlined />,       label: 'Ontology' },

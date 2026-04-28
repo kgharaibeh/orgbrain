@@ -4,14 +4,14 @@ Central API for all platform operations: services, connectors, governance, brain
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import os
 
-from routers import services, connectors, topics, governance, brain, jobs, agent, ontology
+from routers import services, connectors, topics, governance, brain, jobs, agent, ontology, ingest
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -49,11 +49,106 @@ app.include_router(brain.router,       prefix="/api/brain",       tags=["Brain"]
 app.include_router(jobs.router,        prefix="/api/jobs",        tags=["Flink Jobs"])
 app.include_router(agent.router,       prefix="/api/agent",       tags=["Agent"])
 app.include_router(ontology.router,    prefix="/api/ontology",    tags=["Ontology"])
+app.include_router(ingest.router,      prefix="/api/ingest",      tags=["Bulk Ingest"])
 
 
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "orgbrain-control-plane"}
+
+
+@app.post("/api/platform/reset")
+def platform_reset(clear_audit: bool = Query(False)):
+    """
+    Wipe all brain-store data and Kafka data topics.
+    Neo4j: delete all nodes/edges.
+    Qdrant: delete + recreate entity_vectors and event_vectors.
+    TimescaleDB: truncate brain_events and brain_signals.
+    Kafka: delete all raw.* / clean.* / kafka.pii_audit topics.
+    """
+    import psycopg2
+    from neo4j import GraphDatabase
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.models import Distance, VectorParams
+    from kafka import KafkaAdminClient
+    from kafka.errors import UnknownTopicOrPartitionError
+
+    results: dict = {}
+
+    # Neo4j — delete everything
+    try:
+        driver = GraphDatabase.driver(
+            os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
+            auth=(os.getenv("NEO4J_USER", "neo4j"),
+                  os.getenv("NEO4J_PASSWORD", "orgbrain_neo4j")),
+        )
+        with driver.session() as s:
+            s.run("MATCH (n) DETACH DELETE n")
+        driver.close()
+        results["neo4j"] = "cleared"
+    except Exception as e:
+        results["neo4j"] = f"error: {e}"
+
+    # Qdrant — delete and recreate collections
+    try:
+        qdrant = QdrantClient(
+            host=os.getenv("QDRANT_HOST", "qdrant"),
+            port=int(os.getenv("QDRANT_PORT", "6333")),
+        )
+        for coll in ["entity_vectors", "event_vectors"]:
+            try:
+                qdrant.delete_collection(coll)
+            except Exception:
+                pass
+            qdrant.create_collection(
+                coll, vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+            )
+        results["qdrant"] = "cleared"
+    except Exception as e:
+        results["qdrant"] = f"error: {e}"
+
+    # TimescaleDB — truncate tables
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("TIMESCALE_HOST",     "timescale"),
+            port=int(os.getenv("TIMESCALE_PORT", "5432")),
+            dbname=os.getenv("TIMESCALE_DB",     "orgbrain_metrics"),
+            user=os.getenv("TIMESCALE_USER",     "orgbrain"),
+            password=os.getenv("TIMESCALE_PASSWORD", "orgbrain_secret"),
+        )
+        cur = conn.cursor()
+        cur.execute("TRUNCATE brain_events, brain_signals")
+        if clear_audit:
+            cur.execute("TRUNCATE cp_anonymization_audit")
+        conn.commit()
+        cur.close()
+        conn.close()
+        results["timescale"] = "cleared"
+    except Exception as e:
+        results["timescale"] = f"error: {e}"
+
+    # Kafka — delete data topics
+    try:
+        admin = KafkaAdminClient(
+            bootstrap_servers=os.getenv("KAFKA_BROKERS", "kafka:9092"),
+            client_id="orgbrain-reset",
+        )
+        live      = admin.list_topics()
+        to_delete = [
+            t for t in live
+            if t.startswith("raw.") or t.startswith("clean.") or t == "kafka.pii_audit"
+        ]
+        if to_delete:
+            try:
+                admin.delete_topics(to_delete)
+            except UnknownTopicOrPartitionError:
+                pass
+        admin.close()
+        results["kafka"] = f"deleted {len(to_delete)} topics"
+    except Exception as e:
+        results["kafka"] = f"error: {e}"
+
+    return results
 
 
 @app.get("/api/platform/urls")

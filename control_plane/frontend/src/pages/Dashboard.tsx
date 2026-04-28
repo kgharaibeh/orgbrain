@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Row, Col, Card, Statistic, Badge, Space, Typography, Table, Button, Tooltip, Tag } from 'antd'
+import { Row, Col, Card, Statistic, Badge, Space, Typography, Table, Button, Tooltip, Tag, Modal, Switch, message } from 'antd'
 import {
   CheckCircleOutlined, ExclamationCircleOutlined, StopOutlined,
-  ReloadOutlined, LinkOutlined,
+  ReloadOutlined, LinkOutlined, DeleteOutlined, WarningOutlined,
 } from '@ant-design/icons'
 import { servicesApi, brainApi, jobsApi, platformApi } from '../services/api'
 
@@ -20,6 +20,9 @@ export default function Dashboard() {
   const [flinkInfo,   setFlinkInfo]   = useState<any>({})
   const [platformUrls,setPlatformUrls]= useState<any>({})
   const [loading,     setLoading]     = useState(true)
+  const [resetModal,  setResetModal]  = useState(false)
+  const [resetAudit,  setResetAudit]  = useState(false)
+  const [resetting,   setResetting]   = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -40,6 +43,27 @@ export default function Dashboard() {
   }
 
   useEffect(() => { load() }, [])
+
+  const doReset = async () => {
+    setResetting(true)
+    try {
+      const r = await platformApi.reset(resetAudit)
+      const results = r.data as Record<string, string>
+      const errors = Object.entries(results).filter(([, v]) => v.startsWith('error'))
+      if (errors.length) {
+        message.warning(`Reset completed with errors: ${errors.map(([k]) => k).join(', ')}`)
+      } else {
+        message.success('Platform reset — all brain stores and Kafka topics cleared')
+      }
+      setResetModal(false)
+      setResetAudit(false)
+      load()
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || 'Reset failed')
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const running  = services.filter(s => s.status === 'running').length
   const degraded = services.filter(s => ['exited','error','not_found'].includes(s.status)).length
@@ -66,7 +90,15 @@ export default function Dashboard() {
           <Text type="secondary">Organizational Intelligence Platform — real-time health overview</Text>
         </Col>
         <Col>
-          <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
+            <Button
+              danger icon={<DeleteOutlined />}
+              onClick={() => setResetModal(true)}
+            >
+              Reset Platform
+            </Button>
+          </Space>
         </Col>
       </Row>
 
@@ -175,6 +207,36 @@ export default function Dashboard() {
           </Space>
         </Col>
       </Row>
+      <Modal
+        title={<Space><WarningOutlined style={{ color: '#f5222d' }} /><span>Reset Platform Data</span></Space>}
+        open={resetModal}
+        onCancel={() => { setResetModal(false); setResetAudit(false) }}
+        onOk={doReset}
+        okText="Reset Everything"
+        okButtonProps={{ danger: true, loading: resetting }}
+        width={480}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <p style={{ color: '#e8e8e8' }}>
+            This will permanently delete all data from:
+          </p>
+          <ul style={{ color: '#8c8c8c', paddingLeft: 20 }}>
+            <li>Neo4j — all nodes and relationships</li>
+            <li>Qdrant — all vectors (entity_vectors, event_vectors)</li>
+            <li>TimescaleDB — brain_events and brain_signals tables</li>
+            <li>Kafka — all raw.* and clean.* topics</li>
+          </ul>
+          <Space>
+            <Switch checked={resetAudit} onChange={setResetAudit} size="small" />
+            <Text style={{ color: '#8c8c8c', fontSize: 13 }}>
+              Also clear governance audit log
+            </Text>
+          </Space>
+          <p style={{ color: '#f5222d', fontSize: 12 }}>
+            This action cannot be undone.
+          </p>
+        </Space>
+      </Modal>
     </Space>
   )
 }

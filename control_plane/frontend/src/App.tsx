@@ -9,6 +9,7 @@ import Brain from './pages/Brain'
 import Jobs from './pages/Jobs'
 import Agent from './pages/Agent'
 import Ontology from './pages/Ontology'
+import DataLoad from './pages/DataLoad'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="jobs"         element={<Jobs />} />
           <Route path="ontology"     element={<Ontology />} />
           <Route path="agent"        element={<Agent />} />
+          <Route path="dataload"     element={<DataLoad />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -159,17 +159,21 @@ def platform_reset(clear_audit: bool = Query(False)):
 
 @app.get("/api/platform/urls")
 def platform_urls():
-    """Return URLs to all web UIs in the platform."""
+    """Return URLs to all web UIs in the platform.
+    When PUBLIC_HOST env var is set (AWS deployment), URLs use that hostname.
+    """
+    host = os.getenv("PUBLIC_HOST", "localhost")
+    cp_port = "" if os.getenv("PUBLIC_HOST") else ":3001"  # port 80 in AWS, 3001 locally
     return {
-        "control_plane":     "http://localhost:3001",
-        "kafka_ui":          "http://localhost:8080",
-        "flink_ui":          "http://localhost:8082",
-        "schema_registry":   "http://localhost:8081",
-        "minio_console":     "http://localhost:9001",
-        "vault_ui":          "http://localhost:8200",
-        "neo4j_browser":     "http://localhost:7474",
-        "grafana":           "http://localhost:3000",
-        "portainer":         "http://localhost:9900",
-        "agent_api":         "http://localhost:8000/docs",
-        "airflow":           "http://localhost:8090",
+        "control_plane":     f"http://{host}{cp_port}",
+        "kafka_ui":          f"http://{host}:8080",
+        "flink_ui":          f"http://{host}:8082",
+        "schema_registry":   f"http://{host}:8081",
+        "minio_console":     f"http://{host}:9001",
+        "vault_ui":          f"http://{host}:8200",
+        "neo4j_browser":     f"http://{host}:7474",
+        "grafana":           f"http://{host}:3000",
+        "portainer":         f"http://{host}:9900",
+        "agent_api":         f"http://{host}:8000/docs",
+        "airflow":           f"http://{host}:8090",
     }

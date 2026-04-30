@@ -8,6 +8,15 @@
 
 services:
 
+  # ── Control Plane: serve on port 80 so domain needs no port suffix ──────
+  cp-frontend:
+    ports:
+      - "80:80"
+
+  cp-backend:
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+
   # ── Kafka: expose public IP as the external listener ─────────────────────
   kafka:
     environment:

@@ -41,8 +41,12 @@ git clone "$REPO" "$INSTALL_DIR"
 PUBLIC_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || echo "localhost")
 export PUBLIC_IP
 
+# nip.io domain — resolves to this IP automatically, no DNS registration needed
+PUBLIC_HOST="orgbrain.${PUBLIC_IP}.nip.io"
+
 cat > "$INSTALL_DIR/infra/.env.aws" <<EOF
 PUBLIC_IP=${PUBLIC_IP}
+PUBLIC_HOST=${PUBLIC_HOST}
 EOF
 
 # ── Build custom images ────────────────────────────────────────────────────────

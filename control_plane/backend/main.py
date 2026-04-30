@@ -6,12 +6,13 @@ Central API for all platform operations: services, connectors, governance, brain
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from routers import services, connectors, topics, governance, brain, jobs, agent, ontology, ingest
+from routers import services, connectors, topics, governance, brain, jobs, agent, ontology, ingest, auth
+from routers.auth import require_auth
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -41,15 +42,20 @@ app.add_middleware(
 )
 
 # ─── API routers ──────────────────────────────────────────────────────────────
-app.include_router(services.router,    prefix="/api/services",    tags=["Services"])
-app.include_router(connectors.router,  prefix="/api/connectors",  tags=["Data Sources"])
-app.include_router(topics.router,      prefix="/api/topics",      tags=["Kafka Topics"])
-app.include_router(governance.router,  prefix="/api/governance",  tags=["Governance"])
-app.include_router(brain.router,       prefix="/api/brain",       tags=["Brain"])
-app.include_router(jobs.router,        prefix="/api/jobs",        tags=["Flink Jobs"])
-app.include_router(agent.router,       prefix="/api/agent",       tags=["Agent"])
-app.include_router(ontology.router,    prefix="/api/ontology",    tags=["Ontology"])
-app.include_router(ingest.router,      prefix="/api/ingest",      tags=["Bulk Ingest"])
+# Auth is public — no dependency
+app.include_router(auth.router,        prefix="/api/auth",        tags=["Auth"])
+
+# All other routes require a valid JWT
+_auth_dep = [Depends(require_auth)]
+app.include_router(services.router,    prefix="/api/services",    tags=["Services"],      dependencies=_auth_dep)
+app.include_router(connectors.router,  prefix="/api/connectors",  tags=["Data Sources"],  dependencies=_auth_dep)
+app.include_router(topics.router,      prefix="/api/topics",      tags=["Kafka Topics"],  dependencies=_auth_dep)
+app.include_router(governance.router,  prefix="/api/governance",  tags=["Governance"],    dependencies=_auth_dep)
+app.include_router(brain.router,       prefix="/api/brain",       tags=["Brain"],         dependencies=_auth_dep)
+app.include_router(jobs.router,        prefix="/api/jobs",        tags=["Flink Jobs"],    dependencies=_auth_dep)
+app.include_router(agent.router,       prefix="/api/agent",       tags=["Agent"],         dependencies=_auth_dep)
+app.include_router(ontology.router,    prefix="/api/ontology",    tags=["Ontology"],      dependencies=_auth_dep)
+app.include_router(ingest.router,      prefix="/api/ingest",      tags=["Bulk Ingest"],   dependencies=_auth_dep)
 
 
 @app.get("/health")

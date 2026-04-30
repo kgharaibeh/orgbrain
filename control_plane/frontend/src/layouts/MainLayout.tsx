@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Space, Badge, Tooltip } from 'antd'
+import { Layout, Menu, Typography, Space, Badge, Button, Tooltip } from 'antd'
 import {
   DashboardOutlined, CloudServerOutlined, ApiOutlined,
   SafetyOutlined, UnorderedListOutlined,
   ThunderboltOutlined, RobotOutlined, ExperimentOutlined,
-  BranchesOutlined, UploadOutlined,
+  BranchesOutlined, UploadOutlined, LogoutOutlined, UserOutlined,
 } from '@ant-design/icons'
+import { useAuth } from '../context/AuthContext'
 
 const { Sider, Content, Header } = Layout
 const { Text } = Typography
@@ -27,7 +28,10 @@ const NAV_ITEMS = [
 export default function MainLayout() {
   const navigate  = useNavigate()
   const location  = useLocation()
+  const { username, role, logout } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+
+  const handleLogout = () => { logout(); navigate('/login', { replace: true }) }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -75,8 +79,20 @@ export default function MainLayout() {
           <Text style={{ color: '#8c8c8c', fontSize: 13 }}>
             Organizational Intelligence Platform — Control Plane
           </Text>
-          <Space>
+          <Space size={16}>
             <Badge status="processing" text={<Text style={{ color: '#52c41a', fontSize: 12 }}>Platform Online</Text>} />
+            <Space size={6}>
+              <UserOutlined style={{ color: '#595959' }} />
+              <Text style={{ color: '#8c8c8c', fontSize: 12 }}>{username}</Text>
+              {role === 'admin' && <Text style={{ color: '#1677ff', fontSize: 11 }}>(admin)</Text>}
+            </Space>
+            <Tooltip title="Sign out">
+              <Button
+                size="small" type="text" icon={<LogoutOutlined />}
+                onClick={handleLogout}
+                style={{ color: '#595959' }}
+              />
+            </Tooltip>
           </Space>
         </Header>
 

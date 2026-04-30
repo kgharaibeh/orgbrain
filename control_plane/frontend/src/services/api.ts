@@ -2,6 +2,30 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api', timeout: 30000 })
 
+// Attach JWT token from localStorage to every request
+api.interceptors.request.use(config => {
+  try {
+    const raw = localStorage.getItem('orgbrain_user')
+    if (raw) {
+      const { token } = JSON.parse(raw)
+      if (token) config.headers['Authorization'] = `Bearer ${token}`
+    }
+  } catch {}
+  return config
+})
+
+// Auto-redirect to /login on 401
+api.interceptors.response.use(
+  r => r,
+  err => {
+    if (err?.response?.status === 401) {
+      localStorage.removeItem('orgbrain_user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  }
+)
+
 // ── Services ─────────────────────────────────────────────────────────────────
 export const servicesApi = {
   list:    ()          => api.get('/services'),

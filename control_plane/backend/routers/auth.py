@@ -33,20 +33,20 @@ TOKEN_TTL_S = int(os.getenv("AUTH_TOKEN_TTL", str(12 * 3600)))  # 12 h
 _DEFAULT_USERS = [
     {
         "username": "admin",
-        "hash":     "k+nekeE3bVmcChXUx6BCWkla3RLO7fRKkZ8a4Ljb7dw=",
-        "salt":     "6530e2f822cfb645fff0422752b7775a",
+        "hash":     "MPVNijiE/FEUrjqQfVd9tWoF84Br6pFABGwViB43clk=",
+        "salt":     "51fd939303cca57ef213dfbfbc16b23a",
         "role":     "admin",
     },
     {
         "username": "analyst",
-        "hash":     "YFO5IGUOmon8aObcxW+wRqAWtFCZ1PxziDoxfusH228=",
-        "salt":     "d72bb854884871027f359eeefa3e611a",
+        "hash":     "4kNMTexivhH/Jfre3j8/4C5RLnQo27qy04CJI4AoUhM=",
+        "salt":     "a7e8a2d550760925617c539fb5cf9185",
         "role":     "viewer",
     },
     {
         "username": "operator",
-        "hash":     "Py68MjtAiXTtguk4AvDU6w2oQY2/kHrAwyMiYYnH8zc=",
-        "salt":     "887acf9313e50fca27563d409bf30e54",
+        "hash":     "VywWFsVKG7Im9C+gHVV/enClDKo3s1j0Cc4yqT9BFQ0=",
+        "salt":     "22aa3374af88062145449f72bef36fb5",
         "role":     "viewer",
     },
 ]

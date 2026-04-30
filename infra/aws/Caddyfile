@@ -1,0 +1,76 @@
+# OrgBrain — Caddy reverse proxy with automatic HTTPS (Let's Encrypt HTTP-01).
+# Environment variables resolved at startup:
+#   PUBLIC_IP  — EC2 Elastic IP (e.g. 54.220.235.55)
+# All domains resolve automatically via nip.io wildcard DNS.
+
+{
+    # Let's Encrypt contact email (used for expiry notices only)
+    email orgbrain-admin@nip.io
+    # Serve HTTPS on 443, HTTP on 80 (redirect + ACME challenge)
+}
+
+# ── Control Plane (main UI + API) ─────────────────────────────────────────────
+orgbrain.{$PUBLIC_IP}.nip.io {
+    # Proxy everything to cp-frontend; its internal nginx already routes /api/*
+    reverse_proxy cp-frontend:80 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# ── Kafka UI ──────────────────────────────────────────────────────────────────
+kafka.{$PUBLIC_IP}.nip.io {
+    reverse_proxy kafka-ui:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── Flink UI ──────────────────────────────────────────────────────────────────
+flink.{$PUBLIC_IP}.nip.io {
+    reverse_proxy flink-jobmanager:8081 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana.{$PUBLIC_IP}.nip.io {
+    reverse_proxy grafana:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── Airflow ───────────────────────────────────────────────────────────────────
+airflow.{$PUBLIC_IP}.nip.io {
+    reverse_proxy airflow-webserver:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── Neo4j Browser ─────────────────────────────────────────────────────────────
+neo4j.{$PUBLIC_IP}.nip.io {
+    reverse_proxy neo4j:7474 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── Vault UI ──────────────────────────────────────────────────────────────────
+vault.{$PUBLIC_IP}.nip.io {
+    reverse_proxy vault:8200 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+# ── MinIO Console ─────────────────────────────────────────────────────────────
+minio.{$PUBLIC_IP}.nip.io {
+    reverse_proxy minio:9001 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}

@@ -32,7 +32,7 @@ if [ -b /dev/xvdf ]; then
   mount /dev/xvdf "$DATA_DIR"
   echo "/dev/xvdf $DATA_DIR xfs defaults,nofail 0 2" >> /etc/fstab
 fi
-mkdir -p "$DATA_DIR"/{neo4j/data,neo4j/logs,neo4j/plugins,qdrant,timescale,postgres,minio,grafana,vault}
+mkdir -p "$DATA_DIR"/{neo4j/data,neo4j/logs,neo4j/plugins,qdrant,timescale,postgres,minio,grafana,vault,caddy/data,caddy/config}
 
 # ── Clone repo ────────────────────────────────────────────────────────────────
 git clone "$REPO" "$INSTALL_DIR"
@@ -90,4 +90,13 @@ EOF
 systemctl daemon-reload
 systemctl enable orgbrain
 
-echo "Bootstrap complete. OrgBrain starting at http://${PUBLIC_IP}:3001"
+echo "Bootstrap complete."
+echo "  Control Plane : https://orgbrain.${PUBLIC_IP}.nip.io"
+echo "  Grafana       : https://grafana.${PUBLIC_IP}.nip.io"
+echo "  Kafka UI      : https://kafka.${PUBLIC_IP}.nip.io"
+echo "  Flink UI      : https://flink.${PUBLIC_IP}.nip.io"
+echo "  Airflow       : https://airflow.${PUBLIC_IP}.nip.io"
+echo "  Neo4j         : https://neo4j.${PUBLIC_IP}.nip.io"
+echo "  Vault         : https://vault.${PUBLIC_IP}.nip.io"
+echo "  MinIO         : https://minio.${PUBLIC_IP}.nip.io"
+echo "(Caddy is obtaining TLS certs — allow 30-60 s on first access)"

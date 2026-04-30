@@ -159,21 +159,38 @@ def platform_reset(clear_audit: bool = Query(False)):
 
 @app.get("/api/platform/urls")
 def platform_urls():
-    """Return URLs to all web UIs in the platform.
-    When PUBLIC_HOST env var is set (AWS deployment), URLs use that hostname.
+    """Return URLs to all web UIs.
+    LOCAL:  plain HTTP with explicit ports (localhost).
+    AWS:    HTTPS subdomains via Caddy + nip.io (PUBLIC_IP env var set).
     """
-    host = os.getenv("PUBLIC_HOST", "localhost")
-    cp_port = "" if os.getenv("PUBLIC_HOST") else ":3001"  # port 80 in AWS, 3001 locally
+    public_ip = os.getenv("PUBLIC_IP", "")
+    if public_ip:
+        # AWS deployment — every service has its own HTTPS subdomain
+        def _url(sub: str) -> str:
+            return f"https://{sub}.{public_ip}.nip.io"
+        return {
+            "control_plane":   _url("orgbrain"),
+            "kafka_ui":        _url("kafka"),
+            "flink_ui":        _url("flink"),
+            "grafana":         _url("grafana"),
+            "airflow":         _url("airflow"),
+            "neo4j_browser":   _url("neo4j"),
+            "vault_ui":        _url("vault"),
+            "minio_console":   _url("minio"),
+            "schema_registry": f"http://{public_ip}:8081",   # no browser UI
+            "portainer":       f"http://{public_ip}:9900",
+        }
+    # Local development
     return {
-        "control_plane":     f"http://{host}{cp_port}",
-        "kafka_ui":          f"http://{host}:8080",
-        "flink_ui":          f"http://{host}:8082",
-        "schema_registry":   f"http://{host}:8081",
-        "minio_console":     f"http://{host}:9001",
-        "vault_ui":          f"http://{host}:8200",
-        "neo4j_browser":     f"http://{host}:7474",
-        "grafana":           f"http://{host}:3000",
-        "portainer":         f"http://{host}:9900",
-        "agent_api":         f"http://{host}:8000/docs",
-        "airflow":           f"http://{host}:8090",
+        "control_plane":     "http://localhost:3001",
+        "kafka_ui":          "http://localhost:8080",
+        "flink_ui":          "http://localhost:8082",
+        "schema_registry":   "http://localhost:8081",
+        "minio_console":     "http://localhost:9001",
+        "vault_ui":          "http://localhost:8200",
+        "neo4j_browser":     "http://localhost:7474",
+        "grafana":           "http://localhost:3000",
+        "portainer":         "http://localhost:9900",
+        "agent_api":         "http://localhost:8000/docs",
+        "airflow":           "http://localhost:8090",
     }

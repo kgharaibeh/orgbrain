@@ -1,5 +1,4 @@
-# AWS override — sets external Kafka advertised listener and pins data volumes
-# to the EBS data volume mounted at /data.
+# AWS override — Caddy SSL termination, EBS data volumes, Kafka external listener.
 #
 # Usage on EC2:
 #   export PUBLIC_IP=<elastic-ip>
@@ -8,16 +7,36 @@
 
 services:
 
-  # ── Control Plane: serve on port 80 so domain needs no port suffix ──────
-  cp-frontend:
+  # ── Caddy: HTTPS termination + automatic Let's Encrypt certs ─────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./aws/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/caddy/data:/data
+      - /data/caddy/config:/config
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:-localhost}
+    depends_on:
+      - cp-frontend
+      - cp-backend
+    networks:
+      - default
 
+  # ── Remove direct host-port 3001 and 80 from cp-frontend (Caddy owns 80/443)
+  cp-frontend:
+    ports: !reset
+      - "127.0.0.1:3001:80"   # localhost only — Caddy proxies externally
+
+  # ── cp-backend: pass domain name for platform_urls ────────────────────────
   cp-backend:
     environment:
-      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+      PUBLIC_HOST: ${PUBLIC_IP:-localhost}
 
-  # ── Kafka: expose public IP as the external listener ─────────────────────
+  # ── Kafka: advertise public IP for external clients ───────────────────────
   kafka:
     environment:
       KAFKA_ADVERTISED_LISTENERS: >-

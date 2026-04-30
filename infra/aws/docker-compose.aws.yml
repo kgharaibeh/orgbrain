@@ -1,0 +1,46 @@
+# AWS override — sets external Kafka advertised listener and pins data volumes
+# to the EBS data volume mounted at /data.
+#
+# Usage on EC2:
+#   export PUBLIC_IP=<elastic-ip>
+#   docker compose -f docker-compose.yml -f aws/docker-compose.aws.yml \
+#                  --env-file .env.aws up -d
+
+services:
+
+  # ── Kafka: expose public IP as the external listener ─────────────────────
+  kafka:
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: >-
+        PLAINTEXT://kafka:9092,EXTERNAL://${PUBLIC_IP:-localhost}:9094
+
+  # ── Persistent data on EBS /data volume ──────────────────────────────────
+  neo4j:
+    volumes:
+      - /data/neo4j/data:/data
+      - /data/neo4j/logs:/logs
+      - /data/neo4j/plugins:/plugins
+
+  qdrant:
+    volumes:
+      - /data/qdrant:/qdrant/storage
+
+  timescale:
+    volumes:
+      - /data/timescale:/var/lib/postgresql/data
+
+  postgres:
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+
+  minio:
+    volumes:
+      - /data/minio:/data
+
+  grafana:
+    volumes:
+      - /data/grafana:/var/lib/grafana
+
+  vault:
+    volumes:
+      - /data/vault:/vault/file

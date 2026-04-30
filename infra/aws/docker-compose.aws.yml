@@ -24,7 +24,12 @@ services:
       - cp-frontend
       - cp-backend
     networks:
-      - default
+      - orgbrain    # join the same network as all other services
+
+networks:
+  orgbrain:
+    external: true
+    name: infra_orgbrain
 
   # ── Remove direct host-port 3001 and 80 from cp-frontend (Caddy owns 80/443)
   cp-frontend:

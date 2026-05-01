@@ -82,7 +82,7 @@ export default function Agent() {
           style={{ flex: 1, background: '#0a0a14', border: '1px solid #1f1f2e', overflow: 'hidden', marginBottom: 12 }}
           bodyStyle={{ height: '100%', overflow: 'auto', padding: '16px' }}
         >
-          {messages.length === 0 && !streaming && (
+          {messages.length === 0 && !loading && (
             <div style={{ textAlign: 'center', marginTop: 60 }}>
               <RobotOutlined style={{ fontSize: 48, color: '#1677ff', opacity: 0.5 }} />
               <br /><br />

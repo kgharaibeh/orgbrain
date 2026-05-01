@@ -11,15 +11,16 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, AsyncGenerator, TypedDict
 
+import boto3
 import psycopg2
 import psycopg2.extras
 import requests
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langchain_aws import ChatBedrock
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from neo4j import GraphDatabase
@@ -30,18 +31,19 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-NEO4J_URI      = os.getenv("NEO4J_URI",           "bolt://neo4j:7687")
-NEO4J_USER     = os.getenv("NEO4J_USER",          "neo4j")
-NEO4J_PASS     = os.getenv("NEO4J_PASSWORD",      "orgbrain_neo4j")
-TIMESCALE_HOST = os.getenv("TIMESCALE_HOST",      "timescale")
-TIMESCALE_PORT = int(os.getenv("TIMESCALE_PORT",  "5432"))
-TIMESCALE_DB   = os.getenv("TIMESCALE_DB",        "orgbrain_metrics")
-TIMESCALE_USER = os.getenv("TIMESCALE_USER",      "orgbrain")
-TIMESCALE_PASS = os.getenv("TIMESCALE_PASSWORD",  "orgbrain_secret")
-QDRANT_HOST    = os.getenv("QDRANT_HOST",         "qdrant")
-QDRANT_PORT    = int(os.getenv("QDRANT_PORT",     "6333"))
-OLLAMA_HOST    = os.getenv("OLLAMA_HOST",         "http://ollama:11434")
-OLLAMA_MODEL   = os.getenv("OLLAMA_MODEL",        "llama3.1:8b")
+NEO4J_URI        = os.getenv("NEO4J_URI",           "bolt://neo4j:7687")
+NEO4J_USER       = os.getenv("NEO4J_USER",          "neo4j")
+NEO4J_PASS       = os.getenv("NEO4J_PASSWORD",      "orgbrain_neo4j")
+TIMESCALE_HOST   = os.getenv("TIMESCALE_HOST",      "timescale")
+TIMESCALE_PORT   = int(os.getenv("TIMESCALE_PORT",  "5432"))
+TIMESCALE_DB     = os.getenv("TIMESCALE_DB",        "orgbrain_metrics")
+TIMESCALE_USER   = os.getenv("TIMESCALE_USER",      "orgbrain")
+TIMESCALE_PASS   = os.getenv("TIMESCALE_PASSWORD",  "orgbrain_secret")
+QDRANT_HOST      = os.getenv("QDRANT_HOST",         "qdrant")
+QDRANT_PORT      = int(os.getenv("QDRANT_PORT",     "6333"))
+OLLAMA_HOST      = os.getenv("OLLAMA_HOST",         "http://ollama:11434")   # still used for embeddings
+AWS_REGION       = os.getenv("AWS_REGION",          "us-east-1")
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID",    "us.anthropic.claude-opus-4-5:0")
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
@@ -319,10 +321,14 @@ _compiled_agent = None
 def _get_agent():
     global _compiled_agent
     if _compiled_agent is None:
-        llm = ChatOllama(
-            model=OLLAMA_MODEL,
-            base_url=OLLAMA_HOST,
-            temperature=0.1,
+        bedrock_client = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=AWS_REGION,
+        )
+        llm = ChatBedrock(
+            client=bedrock_client,
+            model_id=BEDROCK_MODEL_ID,
+            model_kwargs={"temperature": 0.1, "max_tokens": 4096},
         ).bind_tools(TOOLS)
 
         def call_model(state: AgentState) -> AgentState:
@@ -469,28 +475,5 @@ async def chat_stream(msg: ChatMessage):
 
 @router.get("/models")
 def available_models():
-    """List models available in Ollama."""
-    try:
-        resp = httpx.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
-        models = resp.json().get("models", [])
-        return {"models": [{"name": m["name"], "size_gb": round(m.get("size", 0) / 1e9, 2)} for m in models]}
-    except Exception as e:
-        raise HTTPException(503, f"Ollama unavailable: {e}")
-
-
-@router.post("/models/pull")
-async def pull_model(model_name: str):
-    """Pull a new model from Ollama registry (streams progress)."""
-    async def stream_pull() -> AsyncGenerator[str, None]:
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                f"{OLLAMA_HOST}/api/pull",
-                json={"name": model_name, "stream": True},
-                timeout=600,
-            ) as response:
-                async for line in response.aiter_lines():
-                    if line:
-                        yield f"data: {line}\n\n"
-
-    return StreamingResponse(stream_pull(), media_type="text/event-stream")
+    """Return the configured Bedrock model."""
+    return {"models": [{"name": BEDROCK_MODEL_ID, "provider": "AWS Bedrock", "region": AWS_REGION}]}

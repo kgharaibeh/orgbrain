@@ -16,7 +16,6 @@ export default function Agent() {
   const [loading,   setLoading]   = useState(false)
   const [examples,  setExamples]  = useState<string[]>([])
   const [models,    setModels]    = useState<any[]>([])
-  const [streaming, setStreaming] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export default function Agent() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streaming])
+  }, [messages])
 
   const send = async (question?: string) => {
     const q = question ?? input.trim()
@@ -35,63 +34,25 @@ export default function Agent() {
     const userMsg: Message = { role: 'user', content: q, ts: new Date() }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
-    setStreaming('')
 
-    // Try streaming first, fall back to direct agent call
     try {
-      const raw = localStorage.getItem('orgbrain_user')
-      const token = raw ? JSON.parse(raw).token : null
-      const resp = await fetch('/api/agent/chat/stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ question: q }),
-      })
-      if (!resp.ok || !resp.body) throw new Error('stream failed')
-
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder()
-      let full = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value)
-        const lines = text.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const chunk = JSON.parse(line.slice(6))
-              full += chunk.token
-              setStreaming(full)
-            } catch {}
-          }
-        }
-      }
-      setMessages(prev => [...prev, { role: 'assistant', content: full, ts: new Date() }])
-      setStreaming('')
-    } catch {
-      // Fallback: direct agent API
-      try {
-        const r = await agentApi.chat({ question: q })
-        const d = r.data
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: d.answer || 'No response',
-          tools: d.tool_calls_made,
-          ts: new Date(),
-        }])
-      } catch (e: any) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: 'Agent service unavailable. Make sure the agent is running (start it from the Jobs page).',
-          ts: new Date(),
-        }])
-      }
+      const r = await agentApi.chat({ question: q })
+      const d = r.data
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: d.answer || 'No response',
+        tools: d.tool_calls_made,
+        ts: new Date(),
+      }])
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail || e?.message || 'Unknown error'
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `Agent error: ${detail}`,
+        ts: new Date(),
+      }])
     } finally {
       setLoading(false)
-      setStreaming('')
     }
   }
 
@@ -162,23 +123,12 @@ export default function Agent() {
             </div>
           ))}
 
-          {/* Streaming response */}
-          {streaming && (
-            <Space align="start">
+          {loading && (
+            <Space>
               <Avatar icon={<RobotOutlined />} style={{ background: '#722ed1' }} />
-              <div style={{
-                background: '#0d0d1a', border: '1px solid #1f1f2e',
-                borderRadius: 8, padding: '10px 14px', maxWidth: '80%',
-              }}>
-                <Paragraph style={{ color: '#e8e8e8', margin: 0, whiteSpace: 'pre-wrap', fontSize: 14 }}>
-                  {streaming}<span style={{ animation: 'blink 1s infinite', color: '#1677ff' }}>▌</span>
-                </Paragraph>
-              </div>
+              <Spin size="small" />
+              <Text type="secondary" style={{ fontSize: 12 }}>Querying brain stores…</Text>
             </Space>
-          )}
-
-          {loading && !streaming && (
-            <Space><Avatar icon={<RobotOutlined />} style={{ background: '#722ed1' }} /><Spin size="small" /></Space>
           )}
           <div ref={bottomRef} />
         </Card>

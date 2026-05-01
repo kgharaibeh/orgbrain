@@ -39,9 +39,14 @@ export default function Agent() {
 
     // Try streaming first, fall back to direct agent call
     try {
+      const raw = localStorage.getItem('orgbrain_user')
+      const token = raw ? JSON.parse(raw).token : null
       const resp = await fetch('/api/agent/chat/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ question: q }),
       })
       if (!resp.ok || !resp.body) throw new Error('stream failed')

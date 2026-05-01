@@ -98,7 +98,7 @@ export const jobsApi = {
 // ── Agent ─────────────────────────────────────────────────────────────────────
 export const agentApi = {
   examples: ()           => api.get('/agent/examples'),
-  chat:     (data: any)  => api.post('/agent/chat', data),
+  chat:     (data: any)  => api.post('/agent/chat', data, { timeout: 180000 }),
   models:   ()           => api.get('/agent/models'),
 }
 

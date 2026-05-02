@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Row, Col, Card, Button, Form, Input, InputNumber, Select,
   Switch, Space, Table, Tag, Upload, Typography, Tabs,
-  Progress, message, Badge, Alert, Divider,
+  Progress, message, Badge, Alert, Divider, Tooltip,
 } from 'antd'
 import {
   UploadOutlined, DatabaseOutlined, ReloadOutlined,
@@ -232,7 +232,11 @@ export default function DataLoad() {
     { title: 'TimescaleDB', dataIndex: 'timescale',
       render: (v: number) => <Tag color="green">{v}</Tag> },
     { title: 'Errors', dataIndex: 'errors',
-      render: (v: number) => v > 0 ? <Tag color="red">{v}</Tag> : <Text type="secondary">0</Text> },
+      render: (v: number, r: any) => v > 0 ? (
+        <Tooltip title={r.first_error || 'See logs for details'} placement="topRight">
+          <Tag color="red" style={{ cursor: 'help' }}>{v} ⚠</Tag>
+        </Tooltip>
+      ) : <Text type="secondary">0</Text> },
     { title: 'Started', dataIndex: 'started_at',
       render: (v: number) => <Text type="secondary" style={{ fontSize: 11 }}>
         {new Date(v * 1000).toLocaleTimeString()}

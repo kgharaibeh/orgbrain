@@ -78,11 +78,42 @@ def _to_label(name: str) -> str:
 
 
 def _find_primary_id(payload: dict) -> tuple:
-    for k, v in payload.items():
-        if k.endswith("_id") and v is not None:
+    """
+    Find the best primary-key field in a record.
+    Tries progressively looser rules; falls back to first non-null value
+    so records without explicit ID fields are never silently dropped.
+    """
+    def _norm(k: str) -> str:
+        return k.lower().replace(" ", "_").replace("-", "_").strip("_")
+
+    keys = list(payload.keys())
+
+    # 1. Exact "id" (case-insensitive)
+    for k in keys:
+        if _norm(k) == "id" and payload[k] is not None:
+            return k, str(payload[k])
+
+    # 2. Ends with a recognised ID suffix
+    ID_SUFFIXES = ("_id", "_no", "_num", "_number", "_code",
+                   "_key", "_ref", "_uuid", "_guid", "_sn", "_seq")
+    for k in keys:
+        nk = _norm(k)
+        if any(nk.endswith(s) for s in ID_SUFFIXES) and payload[k] is not None:
+            return k, str(payload[k])
+
+    # 3. Contains a recognised ID keyword anywhere
+    ID_TOKENS = ("id", "number", "code", "reference", "ref", "key", "serial")
+    for k in keys:
+        nk = _norm(k)
+        if any(tok in nk for tok in ID_TOKENS) and payload[k] is not None:
+            return k, str(payload[k])
+
+    # 4. Fall back to the first non-empty value in the record
+    for k in keys:
+        v = payload[k]
+        if v is not None and str(v).strip():
             return k, str(v)
-    if "id" in payload and payload["id"] is not None:
-        return "id", str(payload["id"])
+
     return None, None
 
 
@@ -254,6 +285,7 @@ def _run_ingest(job_id: str, records: list, entity_type: str,
         return
 
     n_cnt = q_cnt = t_cnt = err_cnt = 0
+    first_err: str = ""
     try:
         for i, record in enumerate(records):
             processed = _apply_rules(record, rules) if rules else record
@@ -263,10 +295,20 @@ def _run_ingest(job_id: str, records: list, entity_type: str,
             if n: n_cnt += 1
             if q: q_cnt += 1
             if t: t_cnt += 1
-            if not (n or q or t): err_cnt += 1
+            if not (n or q or t):
+                err_cnt += 1
+                if not first_err:
+                    _, eid = _find_primary_id(processed)
+                    first_err = (
+                        f"Record {i+1}: no primary ID found. "
+                        f"Columns: {list(processed.keys())[:6]}"
+                        if eid is None
+                        else f"Record {i+1} (id={eid}): all store writes failed"
+                    )
             if (i + 1) % 10 == 0:
                 _upd({"done": i + 1, "neo4j": n_cnt, "qdrant": q_cnt,
-                      "timescale": t_cnt, "errors": err_cnt})
+                      "timescale": t_cnt, "errors": err_cnt,
+                      **({"first_error": first_err} if first_err else {})})
     except Exception as e:
         _upd({"status": "failed", "error": str(e), "finished_at": time.time()})
         return
@@ -277,7 +319,8 @@ def _run_ingest(job_id: str, records: list, entity_type: str,
         except Exception: pass
 
     _upd({"status": "done", "done": len(records), "neo4j": n_cnt, "qdrant": q_cnt,
-          "timescale": t_cnt, "errors": err_cnt, "finished_at": time.time()})
+          "timescale": t_cnt, "errors": err_cnt, "finished_at": time.time(),
+          **({"first_error": first_err} if first_err else {})})
 
 
 # ── File parser ────────────────────────────────────────────────────────────────

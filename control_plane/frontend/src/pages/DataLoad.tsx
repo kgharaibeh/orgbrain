@@ -87,7 +87,7 @@ export default function DataLoad() {
     if (!rawFile) return
 
     // auto-detect entity type from filename
-    const stem = rawFile.name.replace(/\.(json|csv)$/, '')
+    const stem = rawFile.name.replace(/\.(json|csv|xlsx|xls)$/i, '')
     setFileEtype(stem)
 
     setFileParsing(true)
@@ -257,7 +257,7 @@ export default function DataLoad() {
                 fileList={fileList}
                 onChange={handleFileChange}
                 beforeUpload={() => false}
-                accept=".json,.csv"
+                accept=".json,.csv,.xlsx,.xls"
                 multiple={false}
                 style={{ background: '#050510', borderColor: '#1f1f2e' }}
               >
@@ -265,11 +265,12 @@ export default function DataLoad() {
                   <InboxOutlined style={{ color: '#1677ff', fontSize: 32 }} />
                 </p>
                 <p style={{ color: '#8c8c8c' }}>
-                  Drag a <Text code>.json</Text> or <Text code>.csv</Text> file here,
-                  or click to select
+                  Drag a file here or click to select
                 </p>
                 <p style={{ color: '#595959', fontSize: 12 }}>
-                  JSON: array of objects. CSV: header row required.
+                  Supported formats: <Text code>.xlsx</Text> <Text code>.xls</Text>{' '}
+                  <Text code>.csv</Text> <Text code>.json</Text>
+                  &nbsp;·&nbsp;Excel: first sheet used, first row as headers
                 </p>
               </Dragger>
 

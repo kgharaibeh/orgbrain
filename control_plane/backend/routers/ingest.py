@@ -14,6 +14,9 @@ import time
 import uuid
 from typing import Optional
 
+import openpyxl
+import xlrd
+
 import psycopg2
 import psycopg2.extras
 import requests
@@ -277,7 +280,64 @@ def _run_ingest(job_id: str, records: list, entity_type: str,
           "timescale": t_cnt, "errors": err_cnt, "finished_at": time.time()})
 
 
-# ── File preview ───────────────────────────────────────────────────────────────
+# ── File parser ────────────────────────────────────────────────────────────────
+
+def _parse_file(content: bytes, filename: str) -> list[dict]:
+    """Parse JSON, CSV, XLS, or XLSX bytes into a list of dicts."""
+    name = (filename or "").lower()
+
+    if name.endswith(".json"):
+        data = json.loads(content)
+        return data if isinstance(data, list) else [data]
+
+    if name.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
+        return [dict(row) for row in reader]
+
+    if name.endswith(".xlsx"):
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+        headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
+        records = []
+        for row in rows[1:]:
+            rec = {}
+            for h, v in zip(headers, row):
+                if v is None:
+                    continue          # skip empty cells
+                rec[h] = str(v) if not isinstance(v, (int, float, bool)) else v
+            if rec:
+                records.append(rec)
+        wb.close()
+        return records
+
+    if name.endswith(".xls"):
+        wb = xlrd.open_workbook(file_contents=content)
+        ws = wb.sheet_by_index(0)
+        if ws.nrows == 0:
+            return []
+        headers = [str(ws.cell_value(0, c)) for c in range(ws.ncols)]
+        records = []
+        for r in range(1, ws.nrows):
+            rec = {}
+            for c, h in enumerate(headers):
+                v = ws.cell_value(r, c)
+                if v == "":
+                    continue
+                # xlrd returns floats for all numbers; convert integers
+                if isinstance(v, float) and v == int(v):
+                    v = int(v)
+                rec[h] = v
+            if rec:
+                records.append(rec)
+        return records
+
+    raise HTTPException(400, "Unsupported file format. Accepted: .json, .csv, .xlsx, .xls")
+
+
+# ── File preview ────────────────────────────────────────────────────────────────
 
 @router.post("/preview/file")
 async def preview_file(file: UploadFile = File(...)):
@@ -285,14 +345,7 @@ async def preview_file(file: UploadFile = File(...)):
     content  = await file.read()
     filename = file.filename or ""
     try:
-        if filename.endswith(".json"):
-            data    = json.loads(content)
-            records = data if isinstance(data, list) else [data]
-        elif filename.endswith(".csv"):
-            reader  = csv.DictReader(io.StringIO(content.decode("utf-8")))
-            records = [dict(row) for row in reader]
-        else:
-            raise HTTPException(400, "Only .json and .csv files are supported")
+        records = _parse_file(content, filename)
     except HTTPException:
         raise
     except Exception as e:
@@ -317,14 +370,7 @@ async def ingest_file(
     content  = await file.read()
     filename = file.filename or "unknown"
     try:
-        if filename.endswith(".json"):
-            data    = json.loads(content)
-            records = data if isinstance(data, list) else [data]
-        elif filename.endswith(".csv"):
-            reader  = csv.DictReader(io.StringIO(content.decode("utf-8")))
-            records = [dict(row) for row in reader]
-        else:
-            raise HTTPException(400, "Only .json and .csv files are supported")
+        records = _parse_file(content, filename)
     except HTTPException:
         raise
     except Exception as e:
